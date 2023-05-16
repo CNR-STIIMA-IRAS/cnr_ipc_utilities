@@ -1,2 +1,2 @@
 # cnr_ipc_utilities
-A set of utilities for Inter process communication
+Set of utilities for inter process communications, and network communucation

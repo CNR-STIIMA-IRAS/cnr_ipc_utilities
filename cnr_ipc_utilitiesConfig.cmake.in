@@ -1,0 +1,14 @@
+# - Config file for the cnr_ipc_utilities package
+# It defines the following variables
+#  cnr_ipc_utilities_INCLUDE_DIRS - include directories for FooBar
+#  cnr_ipc_utilities_LIBRARIES    - libraries to link against
+#  cnr_ipc_utilities_EXECUTABLE   - the bar executable
+
+set(cnr_ipc_utilities_INCLUDE_DIRS "@CONF_INCLUDE_DIRS@")
+
+# Our library dependencies (contains definitions for IMPORTED targets)
+include("${cnr_ipc_utilities_DIR}/export_cnr_ipc_utilities.cmake")
+
+# These are IMPORTED targets created by cnr_ipc_utilitiesTargets.cmake
+set(cnr_ipc_utilities_LIBRARIES cnr_ipc_utilities)
+

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>cnr_ipc_utilities</name>
+  <version>0.0.0</version>
+  <description>The cnr_ipc_utilities package</description>
+
+  <maintainer email="iras@stiima.cnr.it">iras</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website">http://https://github.com/CNR-STIIMA-IRAS/cnr_ipc_utilities</url>
+
+  <author email="nicola.pedrocchi@stiima.cnr.it">Nicola Pedrocchi</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>cmake</buildtool_depend>
+  
+  <test_depend>curl</test_depend>
+  <test_depend>code_coverage</test_depend>
+  
+  <export>
+    <rosdoc config="rosdoc.yaml" />
+  </export>
+</package>
