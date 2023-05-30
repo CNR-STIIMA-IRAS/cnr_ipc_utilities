@@ -1,10 +1,8 @@
-#ifndef SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC
-#define SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC
+#ifndef CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC
+#define CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC
 
-#ifndef CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IPC
-#define CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IPC
+#include <type_traits>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
@@ -23,101 +21,194 @@ namespace ipc
 {
 
 /**
- * @class ShmemIPC
+ * @class rt_data_accessor_t
  *
  */
-class ShmemIPC
+enum class AccessMode : int
 {
- public:
-  typedef std::shared_ptr<ShmemIPC> Ptr;
-  typedef std::shared_ptr<const ShmemIPC> ConstPtr;
+  CREATE_AND_SYNC_WRITE = 0,
+  CREATE_AND_SYNC_READ,
+  OPEN_AND_SYNC_WRITE,
+  OPEN_AND_SYNC_READ
+};
 
-  enum ErrorCode
-  {
-    NONE_ERROR = 0,
-    UNMACTHED_DATA_DIMENSION = 1,
-    UNCORRECT_CALL = 2,
-    WATCHDOG = 3
-  };
+enum class ErrorCode : int
+{
+  OK = 0,
+  ERROR_UNMACTHED_DATA_DIMENSION = 1,
+  ERROR_UNCORRECT_CALL = 2,
+  ERROR_WRITING_WATCHDOG = 3,
+  ERROR_READING_WATCHDOG = 4,
+  ERROR_UNMATCHED_TIME = 5,
+  WARNING_NOT_BONDED = 6
+};
 
-  struct IPCStruct
-  {
-    struct Header
-    {
-      uint8_t bond_flag_;
-      uint8_t rt_flag_;
-      double time_;
-    } __attribute__((packed)) header_;
+std::string to_string(ErrorCode err);
+int as_integer(ErrorCode const value);
 
-    char buffer[1024];
-    IPCStruct() { clear(); }
-    void clear()
-    {
-      header_.bond_flag_ = 0;
-      header_.rt_flag_ = 0;
-      header_.time_ = 0;
-      std::memset(&buffer[0], 0x0, 1024 * sizeof(char));
-    }
-  };
+template<AccessMode M>
+class data_accessor_t
+{
+public:
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_WRITE) || (O==AccessMode::CREATE_AND_SYNC_READ)>::type* = nullptr>
+  data_accessor_t(const std::size_t& dim, const std::string& name);
 
-  enum IPCAccessMode
-  {
-    CREATE,
-    OPEN
-  };
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_WRITE) || (O==AccessMode::OPEN_AND_SYNC_READ)>::type* = nullptr>
+  data_accessor_t(const std::string& name);
 
-  ShmemIPC(const std::string &identifier,
-      double operational_time,
-      double watchdog_decimation,
-      const IPCAccessMode &mode,
-      const std::size_t dim);
-  ShmemIPC(const std::string &identifier, double operational_time, double watchdog_decimation);
-  ~ShmemIPC();
+  ~data_accessor_t();
 
-  bool isHardRT();
-  bool setHardRT();
-  bool setSoftRT();
+  std::size_t dim() const;
+  void get(void *shmem);
+  void set(const void *shmem);
 
-  bool isBonded();
-  bool bond();
-  bool breakBond();
-  ErrorCode update(const uint8_t *buffer, const double time, const std::size_t &n_bytes);
-  ErrorCode flush(uint8_t *buffer, double *time, double *latency_time, const std::size_t &n_bytes);
-
-  std::size_t getSize(bool prepend_header) const;
-  std::string getName() const;
-  double getWatchdog() const;
-  std::string to_string(ErrorCode err);
-
-  void dump(IPCStruct *buffer) { return getIPCStruct(buffer); }
-
- protected:
-  const IPCAccessMode access_mode_;
-  const double operational_time_;
-  const double watchdog_;
-
+private:
   const std::string name_;
-  std::size_t dim_data_;
-  std::size_t dim_with_header_;
   boost::interprocess::mapped_region shared_map_;
   boost::interprocess::shared_memory_object shared_memory_;
   std::shared_ptr<boost::interprocess::named_mutex> mutex_;
-  double start_watchdog_time_;
-  double data_time_prev_;
-  double flush_time_prev_;
+};
 
-  std::size_t bond_cnt_;
+
+struct rt_data_t
+{
+  struct Header
+  {
+    uint8_t bond_flag_;
+    uint8_t rt_flag_;
+    double time_;
+  } __attribute__((packed)) header_;
+
+  char buffer_[1024];
+
+  explicit rt_data_t() { clear(); }
+  rt_data_t(const rt_data_t & ) = delete;
+  rt_data_t(rt_data_t&&) = delete;
+  void clear()
+  {
+    header_.bond_flag_ = 0;
+    header_.rt_flag_ = 0;
+    header_.time_ = 0;
+    std::memset(&buffer_[0], 0x0, 1024 * sizeof(char));
+  }
+};
+
+std::string to_string(const rt_data_t& in);
+
+
+class watchdog_t
+{
+public:
+    watchdog_t(const double watchdog_s, const double multiplier = 1.1);
+    double now();
+    void tic();
+    bool toc();
+    double dt() const;
+    double threshold() const; 
+private:
+    double tic_, toc_;
+    const double watchdog_;
+    const double multiplier_;
+};
+
+
+template<AccessMode M>
+class rt_data_accessor_t
+{
+ public:
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_WRITE)>::type* = nullptr>
+  rt_data_accessor_t(const std::size_t& dim, const std::string &name, const double& watchdog_s);
+
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_WRITE)>::type* = nullptr>
+  rt_data_accessor_t(const std::string& name, const double& watchdog_s);
+
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_READ)>::type* = nullptr>
+  rt_data_accessor_t(const std::size_t& dim, const std::string &name, const double& watchdog_s);
+
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_READ)>::type* = nullptr>
+  rt_data_accessor_t(const std::string& name, const double& watchdog_s);
+
+
+  ~rt_data_accessor_t();
+
+  bool is_hard_rt();
+  bool set_hard_rt(std::string& what);
+  bool set_soft_rt(std::string& what);
+
+  bool is_bonded();
+  bool bond(std::string& what);
+  bool break_bond();
+
+  /**
+   * @brief 
+   * 
+   * @param buffer 
+   * @param time 
+   * @param n_bytes 
+   * @param what 
+   * @return ErrorCode 
+   */
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_WRITE) || (O==AccessMode::OPEN_AND_SYNC_WRITE)>::type*  = nullptr>
+  ErrorCode write(const uint8_t *idata_buffer, const uint8_t *safety_buffer, const double& time, const std::size_t &n_bytes, std::string& what);
+
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_READ) || (O==AccessMode::CREATE_AND_SYNC_READ)>::type* = nullptr>
+  ErrorCode write(const uint8_t *idata_buffer, const uint8_t *safety_buffer, const double& time, const std::size_t &n_bytes, std::string& what)
+  {
+    return ErrorCode::ERROR_UNCORRECT_CALL;
+  }
+
+  /**
+   * @brief The function copies the content of the shared memory over the buffer (first argument)
+   * 
+   * NOTE:
+   * - If the shared memory is not bonded, the buffer is set to zero. OK is returned.
+   * - The behavior is different if the object is the data_accessor_t CREATOR/WRITER or CLIENT/READER
+   *      * If the object is the WRITER, does not raise error if the deadline is not met. Probably, the process of the reader is already acting to overcome the watchdog error. The WRITER just add the label with the time he wrote the data. 
+   * 
+   * @param data_buffer the data in the shared memory
+   * @param data_time_buffer Time in the shared memory, corresponding to the last shared memory write operation
+   * @param data_time_latency Time Difference between the actual writing time and the previous writing time
+   * @param n_bytes number of bytes to be copied. Forcing thuis information is for security matter.
+   * @param what string with a description of the error/warning
+   * @return ErrorCode 
+   */
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_READ) || (O==AccessMode::CREATE_AND_SYNC_READ)>::type* = nullptr>
+  ErrorCode read(uint8_t *odata_buffer, double *odata_time_label, double *odata_time_latency, const uint8_t *safety_buffer, const std::size_t &n_bytes, std::string& what);
+  
+  template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_WRITE) || (O==AccessMode::CREATE_AND_SYNC_WRITE)>::type* = nullptr>
+  ErrorCode read(uint8_t *odata_buffer, double *odata_time_label, double *odata_time_latency, const uint8_t *safety_buffer, const std::size_t &n_bytes, std::string& what)
+  {
+    return ErrorCode::ERROR_UNCORRECT_CALL;
+  }
+
+  std::size_t dim(bool prepend_header) const;
+  std::string name() const;
+  //double getWatchdog() const;
+  
+  void dump(rt_data_t *buffer) { return data_accessor_.get(buffer); }
+
+ protected:
+  const std::string name_;
+  std::size_t dim_buffer_;
+
+  data_accessor_t<M> data_accessor_;
+  struct 
+  {
+    double update_time_;
+    rt_data_t data_;
+  } last_data_available_;
+
+  watchdog_t watchdog_;
+
   bool bonded_prev_;
   bool is_hard_rt_prev_;
 
-  void getIPCStruct(IPCStruct *shmem);
-  void setIPCStruct(const IPCStruct *shmem);
+  bool set_rt(std::string& what, uint8_t hard);
 };
 
 }  // namespace ipc
 }  // namespace cnr
 
-#endif /* SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IPC */
+#include <cnr_ipc_utilities/impl/shmem_ipc_impl.hpp>
 
-
-#endif  /* SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC */
+#endif  /* CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC */
