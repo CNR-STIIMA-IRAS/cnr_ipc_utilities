@@ -1,5 +1,5 @@
-#ifndef CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC
-#define CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC
+#ifndef SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_RT_IPC
+#define SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_RT_IPC
 
 #include <type_traits>
 
@@ -21,7 +21,7 @@ namespace ipc
 {
 
 /**
- * @class rt_data_accessor_t
+ * @class rt_ipc_t
  *
  */
 enum class AccessMode : int
@@ -29,7 +29,7 @@ enum class AccessMode : int
   CREATE_AND_SYNC_WRITE = 0,
   CREATE_AND_SYNC_READ,
   OPEN_AND_SYNC_WRITE,
-  OPEN_AND_SYNC_READ
+  OPEN_AND_SYNC_READ, 
 };
 
 enum class ErrorCode : int
@@ -47,16 +47,16 @@ std::string to_string(ErrorCode err);
 int as_integer(ErrorCode const value);
 
 template<AccessMode M>
-class data_accessor_t
+class ipc_t
 {
 public:
   template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_WRITE) || (O==AccessMode::CREATE_AND_SYNC_READ)>::type* = nullptr>
-  data_accessor_t(const std::size_t& dim, const std::string& name);
+  ipc_t(const std::size_t& dim, const std::string& name);
 
   template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_WRITE) || (O==AccessMode::OPEN_AND_SYNC_READ)>::type* = nullptr>
-  data_accessor_t(const std::string& name);
+  ipc_t(const std::string& name);
 
-  ~data_accessor_t();
+  ~ipc_t();
 
   std::size_t dim() const;
   void get(void *shmem);
@@ -113,23 +113,29 @@ private:
 
 
 template<AccessMode M>
-class rt_data_accessor_t
+class rt_ipc_t
 {
  public:
+  using ptr = std::shared_ptr< rt_ipc_t<M> >;
+
   template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_WRITE)>::type* = nullptr>
-  rt_data_accessor_t(const std::size_t& dim, const std::string &name, const double& watchdog_s);
+  rt_ipc_t(const std::size_t& dim, const std::string &name, const double& watchdog_s);
 
   template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_WRITE)>::type* = nullptr>
-  rt_data_accessor_t(const std::string& name, const double& watchdog_s);
+  rt_ipc_t(const std::string& name, const double& watchdog_s);
 
   template<AccessMode O=M, typename std::enable_if<(O==AccessMode::CREATE_AND_SYNC_READ)>::type* = nullptr>
-  rt_data_accessor_t(const std::size_t& dim, const std::string &name, const double& watchdog_s);
+  rt_ipc_t(const std::size_t& dim, const std::string &name, const double& watchdog_s);
 
   template<AccessMode O=M, typename std::enable_if<(O==AccessMode::OPEN_AND_SYNC_READ)>::type* = nullptr>
-  rt_data_accessor_t(const std::string& name, const double& watchdog_s);
+  rt_ipc_t(const std::string& name, const double& watchdog_s);
 
 
-  ~rt_data_accessor_t();
+  rt_ipc_t() = delete;
+  rt_ipc_t(const rt_ipc_t&) = delete;
+  rt_ipc_t(rt_ipc_t&&) = delete;
+
+  ~rt_ipc_t();
 
   bool is_hard_rt();
   bool set_hard_rt(std::string& what);
@@ -162,7 +168,7 @@ class rt_data_accessor_t
    * 
    * NOTE:
    * - If the shared memory is not bonded, the buffer is set to zero. OK is returned.
-   * - The behavior is different if the object is the data_accessor_t CREATOR/WRITER or CLIENT/READER
+   * - The behavior is different if the object is the ipc_t CREATOR/WRITER or CLIENT/READER
    *      * If the object is the WRITER, does not raise error if the deadline is not met. Probably, the process of the reader is already acting to overcome the watchdog error. The WRITER just add the label with the time he wrote the data. 
    * 
    * @param data_buffer the data in the shared memory
@@ -191,7 +197,7 @@ class rt_data_accessor_t
   const std::string name_;
   std::size_t dim_buffer_;
 
-  data_accessor_t<M> data_accessor_;
+  ipc_t<M> data_accessor_;
   struct 
   {
     double update_time_;
@@ -206,9 +212,24 @@ class rt_data_accessor_t
   bool set_rt(std::string& what, uint8_t hard);
 };
 
+template<AccessMode M> 
+using rt_ipc_ptr_t = typename rt_ipc_t< M >::ptr;
+
+using rt_ipc_creator_and_reader_t = rt_ipc_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_READ>;
+using rt_ipc_creator_and_writer_t = rt_ipc_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_WRITE>;
+using rt_ipc_opener_and_reader_t = rt_ipc_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_READ>;
+using rt_ipc_opener_and_writer_t = rt_ipc_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_WRITE>;
+
+using rt_ipc_creator_and_reader_ptr_t = rt_ipc_ptr_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_READ>;
+using rt_ipc_creator_and_writer_ptr_t = rt_ipc_ptr_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_WRITE>;
+using rt_ipc_opener_and_reader_ptr_t = rt_ipc_ptr_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_READ>;
+using rt_ipc_opener_and_writer_ptr_t = rt_ipc_ptr_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_WRITE>;
+
+
+
 }  // namespace ipc
 }  // namespace cnr
 
-#include <cnr_ipc_utilities/impl/shmem_ipc_impl.hpp>
+#include <cnr_ipc_utilities/impl/rt_ipc_impl.hpp>
 
-#endif  /* CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_SHMEM_IPC */
+#endif  /* SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_RT_IPC */

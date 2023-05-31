@@ -44,7 +44,8 @@
 #include <iostream>
 #include <map>
 
-#include <cnr_ipc_utilities/shmem_ipc.h>
+#include <cnr_ipc_utilities/rt_ipc.h>
+#include <cnr_ipc_utilities/rt_ipc_module.h>
 
 namespace detail
 {
@@ -139,45 +140,64 @@ bool time_measure_ok(std::size_t id, std::string& what, const bool& val, F&& f)
 const std::size_t n_bytes = 24;
 const double watchdog = 0.01;
 
-std::shared_ptr<cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_WRITE> > rt_data_cw;
-std::shared_ptr<cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_READ> > rt_data_cr;
-std::shared_ptr<cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_WRITE> > rt_data_ow;
-std::shared_ptr<cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_READ> > rt_data_or;
+std::shared_ptr<cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_WRITE> > rt_data_cw;
+std::shared_ptr<cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_READ> > rt_data_cr;
+std::shared_ptr<cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_WRITE> > rt_data_ow;
+std::shared_ptr<cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_READ> > rt_data_or;
+
+cnr::ipc::rt_bidir_ipc_creator_ptr_t rt_creator;
+cnr::ipc::rt_bidir_ipc_opener_ptr_t rt_opener;
+
+cnr::ipc::rt_master_ipc_ptr_t rt_master;
+cnr::ipc::rt_slave_ipc_ptr_t rt_slave;
 
 TEST(TestSuite, createWriter)
 {
   EXPECT_TRUE(does_not_throw(
-      [&]
-      {
-        rt_data_cw.reset(
-            new cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_WRITE>(n_bytes, "AAA", watchdog));
+      [&] {
+        rt_data_cw.reset(new cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_WRITE>(n_bytes, "AAA", watchdog));
       }));
 }
 
 TEST(TestSuite, createReader)
 {
   EXPECT_TRUE(does_not_throw(
-      [&]
-      {
-        rt_data_cr.reset(
-            new cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_READ>(n_bytes, "BBB", watchdog));
+      [&] {
+        rt_data_cr.reset(new cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::CREATE_AND_SYNC_READ>(n_bytes, "BBB", watchdog));
       }));
 }
 
 TEST(TestSuite, openWriter)
 {
   EXPECT_TRUE(does_not_throw(
-      [&] {
-        rt_data_ow.reset(new cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_WRITE>("BBB", watchdog));
-      }));
+      [&] { rt_data_ow.reset(new cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_WRITE>("BBB", watchdog)); }));
 }
 
 TEST(TestSuite, openReader)
 {
   EXPECT_TRUE(does_not_throw(
-      [&] {
-        rt_data_or.reset(new cnr::ipc::rt_data_accessor_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_READ>("AAA", watchdog));
-      }));
+      [&] { rt_data_or.reset(new cnr::ipc::rt_ipc_t<cnr::ipc::AccessMode::OPEN_AND_SYNC_READ>("AAA", watchdog)); }));
+}
+
+TEST(TestSuite, createCreator)
+{
+  EXPECT_TRUE(does_not_throw(
+      [&] { rt_creator.reset(new cnr::ipc::rt_bidir_ipc_creator_t("shared_mem", n_bytes, n_bytes * 2, watchdog)); }));
+}
+
+TEST(TestSuite, createOpener)
+{
+  EXPECT_TRUE(does_not_throw([&] { rt_opener.reset(new cnr::ipc::rt_bidir_ipc_opener_t("shared_mem", watchdog)); }));
+}
+
+TEST(TestSuite, createMaster)
+{
+  EXPECT_TRUE(does_not_throw([&] { rt_master.reset(new cnr::ipc::rt_master_ipc_t()); }));
+}
+
+TEST(TestSuite, createSlave)
+{
+  EXPECT_TRUE(does_not_throw([&] { rt_slave.reset(new cnr::ipc::rt_slave_ipc_t()); }));
 }
 
 TEST(TestSuite, writeWriter)
@@ -229,6 +249,33 @@ TEST(TestSuite, writeOpener)
                            cnr::ipc::ErrorCode::ERROR_UNMATCHED_TIME,
                            [&]() -> cnr::ipc::ErrorCode
                            { return rt_data_ow->write(idata_buffer, safety_buffer, time, n_bytes, what); }));
+}
+
+TEST(TestSuite, writeCreator)
+{
+  uint8_t idata_buffer[n_bytes] = {0};
+  uint8_t safety_buffer[n_bytes] = {1};
+  double time = cnr::ipc::now_s();
+  std::string what;
+  EXPECT_TRUE(time_measure(__LINE__,
+                           what,
+                           cnr::ipc::ErrorCode::OK,
+                           [&]() -> cnr::ipc::ErrorCode
+                           { return rt_creator->write(idata_buffer, safety_buffer, time, 2 * n_bytes, what); }));
+
+  EXPECT_TRUE(time_measure(__LINE__,
+                           what,
+                           cnr::ipc::ErrorCode::ERROR_UNMACTHED_DATA_DIMENSION,
+                           [&]() -> cnr::ipc::ErrorCode
+                           { return rt_creator->write(idata_buffer, safety_buffer, time, 3 * n_bytes, what); }));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(int(watchdog * 2000)));
+  // The time that I superimpose, is different from now()
+  EXPECT_TRUE(time_measure(__LINE__,
+                           what,
+                           cnr::ipc::ErrorCode::ERROR_UNMATCHED_TIME,
+                           [&]() -> cnr::ipc::ErrorCode
+                           { return rt_creator->write(idata_buffer, safety_buffer, time, 2 * n_bytes, what); }));
 }
 
 TEST(TestSuite, readWriteWriter)
@@ -337,7 +384,6 @@ TEST(TestSuite, readWriteWriter)
   EXPECT_TRUE(time_measure_ok(__LINE__, what, false, [&]() -> bool { return rt_data_or->is_hard_rt(); }));
 }
 
-
 TEST(TestSuite, readWriteReader)
 {
   uint8_t odata_buffer[n_bytes] = {0};
@@ -443,6 +489,21 @@ TEST(TestSuite, readWriteReader)
 
   EXPECT_TRUE(time_measure_ok(__LINE__, what, false, [&]() -> bool { return rt_data_cr->is_hard_rt(); }));
 }
+
+TEST(TestSuite, insertMaster)
+{
+  std::string what;
+  EXPECT_TRUE(time_measure_ok(__LINE__, what, true, [&]() -> bool { return rt_master->insert(rt_creator); }));
+  EXPECT_TRUE(time_measure_ok(__LINE__, what, false, [&]() -> bool { return rt_master->insert(rt_creator); }));
+}
+
+TEST(TestSuite, insertSlave)
+{
+  std::string what;
+  EXPECT_TRUE(time_measure_ok(__LINE__, what, true, [&]() -> bool { return rt_slave->insert(rt_opener); }));
+  EXPECT_TRUE(time_measure_ok(__LINE__, what, false, [&]() -> bool { return rt_slave->insert(rt_opener); }));
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

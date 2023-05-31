@@ -1,7 +1,7 @@
-#ifndef SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IMPL_SHMEM_IPC_IMPL
-#define SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IMPL_SHMEM_IPC_IMPL
+#ifndef CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IMPL_RT_IPC_IMPL
+#define CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IMPL_RT_IPC_IMPL
 
-#include <cnr_ipc_utilities/shmem_ipc.h>
+#include <cnr_ipc_utilities/rt_ipc.h>
 
 #include <ctime>
 #include <iostream>
@@ -118,7 +118,7 @@ template <AccessMode M>
 template <
     AccessMode O,
     typename std::enable_if<(O == AccessMode::CREATE_AND_SYNC_WRITE) || (O == AccessMode::CREATE_AND_SYNC_READ)>::type*>
-inline data_accessor_t<M>::data_accessor_t(const std::size_t& dim, const std::string& name) : name_(name)
+inline ipc_t<M>::ipc_t(const std::size_t& dim, const std::string& name) : name_(name)
 {
   std::stringstream err;
   err << __PRETTY_FUNCTION__ << std::endl;
@@ -181,7 +181,7 @@ template <AccessMode M>
 template <
     AccessMode O,
     typename std::enable_if<(O == AccessMode::OPEN_AND_SYNC_WRITE) || (O == AccessMode::OPEN_AND_SYNC_READ)>::type*>
-inline data_accessor_t<M>::data_accessor_t(const std::string& name) : name_(name)
+inline ipc_t<M>::ipc_t(const std::string& name) : name_(name)
 {
   std::stringstream err;
   err << __PRETTY_FUNCTION__ << std::endl;
@@ -225,7 +225,7 @@ inline data_accessor_t<M>::data_accessor_t(const std::string& name) : name_(name
 }
 
 template <AccessMode M>
-inline data_accessor_t<M>::~data_accessor_t()
+inline ipc_t<M>::~ipc_t()
 {
   if ((M == AccessMode::CREATE_AND_SYNC_WRITE) || (M == AccessMode::CREATE_AND_SYNC_READ))
   {
@@ -244,13 +244,13 @@ inline data_accessor_t<M>::~data_accessor_t()
 }
 
 template <AccessMode M>
-inline std::size_t data_accessor_t<M>::dim() const
+inline std::size_t ipc_t<M>::dim() const
 {
   return shared_map_.get_size();
 }
 
 template <AccessMode M>
-inline void data_accessor_t<M>::get(void* shmem)
+inline void ipc_t<M>::get(void* shmem)
 {
   boost::interprocess::scoped_lock<boost::interprocess::named_mutex> lock(*mutex_);
   std::memcpy(shmem, shared_map_.get_address(), shared_map_.get_size());
@@ -258,7 +258,7 @@ inline void data_accessor_t<M>::get(void* shmem)
 }
 
 template <AccessMode M>
-inline void data_accessor_t<M>::set(const void* shmem)
+inline void ipc_t<M>::set(const void* shmem)
 {
   boost::interprocess::scoped_lock<boost::interprocess::named_mutex> lock(*mutex_);
   std::memcpy(shared_map_.get_address(), shmem, shared_map_.get_size());
@@ -273,7 +273,7 @@ inline void data_accessor_t<M>::set(const void* shmem)
 // ==========================================================================
 template <AccessMode M>
 template <AccessMode O, typename std::enable_if<(O == AccessMode::CREATE_AND_SYNC_WRITE)>::type*>
-inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::size_t& dim,
+inline rt_ipc_t<M>::rt_ipc_t(const std::size_t& dim,
                                                  const std::string& name,
                                                  const double& watchdog_s)
     : name_(name),
@@ -287,7 +287,7 @@ inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::size_t& dim,
 
 template <AccessMode M>
 template <AccessMode O, typename std::enable_if<(O == AccessMode::OPEN_AND_SYNC_WRITE)>::type*>
-inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::string& name, const double& watchdog_s)
+inline rt_ipc_t<M>::rt_ipc_t(const std::string& name, const double& watchdog_s)
     : name_(name), data_accessor_(name_), watchdog_(watchdog_s), bonded_prev_(false), is_hard_rt_prev_(false)
 {
   dim_buffer_ = data_accessor_.dim() - sizeof(rt_data_t::Header);
@@ -299,7 +299,7 @@ inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::string& name, const 
 
 template <AccessMode M>
 template <AccessMode O, typename std::enable_if<(O == AccessMode::CREATE_AND_SYNC_READ)>::type*>
-inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::size_t& dim,
+inline rt_ipc_t<M>::rt_ipc_t(const std::size_t& dim,
                                                  const std::string& name,
                                                  const double& watchdog_s)
     : name_(name),
@@ -313,7 +313,7 @@ inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::size_t& dim,
 
 template <AccessMode M>
 template <AccessMode O, typename std::enable_if<(O == AccessMode::OPEN_AND_SYNC_READ)>::type*>
-inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::string& name, const double& watchdog_s)
+inline rt_ipc_t<M>::rt_ipc_t(const std::string& name, const double& watchdog_s)
     : name_(name), data_accessor_(name_), watchdog_(watchdog_s), bonded_prev_(false), is_hard_rt_prev_(false)
 {
   dim_buffer_ = data_accessor_.dim() - sizeof(rt_data_t::Header);
@@ -324,7 +324,7 @@ inline rt_data_accessor_t<M>::rt_data_accessor_t(const std::string& name, const 
 }
 
 template <AccessMode M>
-inline rt_data_accessor_t<M>::~rt_data_accessor_t()
+inline rt_ipc_t<M>::~rt_ipc_t()
 {
   if (is_bonded())
   {
@@ -333,14 +333,14 @@ inline rt_data_accessor_t<M>::~rt_data_accessor_t()
 }
 
 template <AccessMode M>
-inline bool rt_data_accessor_t<M>::is_hard_rt()
+inline bool rt_ipc_t<M>::is_hard_rt()
 {
   data_accessor_.get(&last_data_available_.data_);
   return (data_accessor_.dim() == 0) ? false : (last_data_available_.data_.header_.rt_flag_ == 1);
 }
 
 template <AccessMode M>
-inline bool rt_data_accessor_t<M>::set_rt(std::string& warning, uint8_t hard)
+inline bool rt_ipc_t<M>::set_rt(std::string& warning, uint8_t hard)
 {
   data_accessor_.get(&last_data_available_.data_);
   last_data_available_.update_time_ = now_s();
@@ -364,26 +364,26 @@ inline bool rt_data_accessor_t<M>::set_rt(std::string& warning, uint8_t hard)
 }
 
 template <AccessMode M>
-inline bool rt_data_accessor_t<M>::set_hard_rt(std::string& warning)
+inline bool rt_ipc_t<M>::set_hard_rt(std::string& warning)
 {
   return this->set_rt(warning, 1);
 }
 
 template <AccessMode M>
-inline bool rt_data_accessor_t<M>::set_soft_rt(std::string& warning)
+inline bool rt_ipc_t<M>::set_soft_rt(std::string& warning)
 {
   return this->set_rt(warning, 0);
 }
 
 template <AccessMode M>
-inline bool rt_data_accessor_t<M>::is_bonded()
+inline bool rt_ipc_t<M>::is_bonded()
 {
   data_accessor_.get(&last_data_available_.data_);
   return (data_accessor_.dim() == 0) ? false : (last_data_available_.data_.header_.bond_flag_ == 1);
 }
 
 template <AccessMode M>
-bool rt_data_accessor_t<M>::bond(std::string& warning)
+bool rt_ipc_t<M>::bond(std::string& warning)
 {
   data_accessor_.get(&last_data_available_.data_);
   last_data_available_.update_time_ = now_s();
@@ -401,7 +401,7 @@ bool rt_data_accessor_t<M>::bond(std::string& warning)
 }
 
 template <AccessMode M>
-inline bool rt_data_accessor_t<M>::break_bond()
+inline bool rt_ipc_t<M>::break_bond()
 {
   data_accessor_.get(&last_data_available_.data_);
   last_data_available_.update_time_ = now_s();
@@ -418,7 +418,7 @@ template <AccessMode M>
 template <
     AccessMode O,
     typename std::enable_if<(O == AccessMode::CREATE_AND_SYNC_WRITE) || (O == AccessMode::OPEN_AND_SYNC_WRITE)>::type*>
-inline ErrorCode rt_data_accessor_t<M>::write(const uint8_t* idata_buffer,
+inline ErrorCode rt_ipc_t<M>::write(const uint8_t* idata_buffer,
                                               const uint8_t* safety_buffer,
                                               const double& idata_time_label,
                                               const std::size_t& n_bytes,
@@ -510,7 +510,7 @@ template <AccessMode M>
 template <
     AccessMode O,
     typename std::enable_if<(O == AccessMode::OPEN_AND_SYNC_READ) || (O == AccessMode::CREATE_AND_SYNC_READ)>::type*>
-inline ErrorCode rt_data_accessor_t<M>::read(uint8_t* odata_buffer,
+inline ErrorCode rt_ipc_t<M>::read(uint8_t* odata_buffer,
                                              double* odata_time_label,
                                              double* odata_time_latency,
                                              const uint8_t* safety_buffer,
@@ -657,7 +657,7 @@ inline int as_integer(ErrorCode const value)
 }
 
 template <AccessMode M>
-inline std::size_t rt_data_accessor_t<M>::dim(bool prepend_header) const
+inline std::size_t rt_ipc_t<M>::dim(bool prepend_header) const
 {
   return prepend_header ? dim_buffer_ + sizeof(rt_data_t::Header) : dim_buffer_;
 }
@@ -665,4 +665,4 @@ inline std::size_t rt_data_accessor_t<M>::dim(bool prepend_header) const
 }  // namespace ipc
 }  // namespace cnr
 
-#endif  /* SRC_CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IMPL_SHMEM_IPC_IMPL */
+#endif  /* CNR_IPC_UTILITIES_INCLUDE_CNR_IPC_UTILITIES_IMPL_SHMEM_IPC_IMPL */
