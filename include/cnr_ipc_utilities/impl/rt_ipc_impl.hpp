@@ -3,8 +3,11 @@
 
 #include <cnr_ipc_utilities/rt_ipc.h>
 
+#include <cmath>
+#include <cstdlib>
 #include <ctime>
 #include <iostream>
+#include <sstream>
 
 namespace cnr
 {

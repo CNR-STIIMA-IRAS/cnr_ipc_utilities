@@ -22,7 +22,6 @@ cnr_set_flags()
 #############################
 ## OPTIONS                 ##
 #############################
-option(USE_ROS1                 "ROS SUPPORT" ON)
 option(ENABLE_TESTING           "ENABLE TESTING" OFF)
 option(ENABLE_COVERAGE_TESTING  "ENABLE COVERAGE TESTING" OFF)
 option(BUILD_EXAMPLES           "BUILD THE EXAMPLES" OFF)
@@ -43,16 +42,6 @@ endif()
 
 ## common
 find_package(Boost REQUIRED COMPONENTS system)
-
-## common
-if(USE_ROS1)
-  find_package(catkin REQUIRED)
-  catkin_package( INCLUDE_DIRS include LIBRARIES ${PROJECT_NAME} )
-endif(USE_ROS1)
-
-cnr_install_directories(USE_ROS1 
-  CNR_INSTALL_INCLUDE_DIR CNR_INSTALL_LIB_DIR CNR_INSTALL_BIN_DIR CNR_INSTALL_SHARE_DIR)
-cnr_enable_testing(ENABLE_TESTING ENABLE_COVERAGE USE_ROS1)
 
 #################
 ## Build       ##
@@ -92,16 +81,16 @@ endif()
 ## Install ##
 #############
 install(DIRECTORY include/${PROJECT_NAME}
-        DESTINATION ${CNR_INSTALL_INCLUDE_DIR}
+        DESTINATION include
         FILES_MATCHING PATTERN "*.h"
         PATTERN ".git" EXCLUDE
 )
 
 install(TARGETS ${PROJECT_NAME}
         EXPORT export_cnr_ipc_utilities
-        ARCHIVE DESTINATION ${CNR_INSTALL_LIB_DIR}
-        LIBRARY DESTINATION ${CNR_INSTALL_LIB_DIR}
-        RUNTIME DESTINATION ${CNR_INSTALL_BIN_DIR}
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin
 )
 ###################
 ## END - Install ##
@@ -142,15 +131,18 @@ endif()
 ## Testing              ##
 ##########################
 if(ENABLE_TESTING)
+  find_package(Threads REQUIRED)
+  find_package(GTest REQUIRED)
+  
   include(GoogleTest)
   add_executable(cnr_ipc_utilities_ipc_test
      test/test_ipc.cpp
   )
   if(${CMAKE_VERSION} VERSION_GREATER  "3.16.0")
     target_link_libraries(cnr_ipc_utilities_ipc_test 
-      ${PROJECT_NAME} Threads::Threads GTest::gtest_main)
+      ${PROJECT_NAME} Threads::Threads GTest::Main)
   else()
-    target_link_libraries(cnr_ipc_utilities_ipc_test ${PROJECT_NAME} GTest::gtest_main)
+    target_link_libraries(cnr_ipc_utilities_ipc_test ${PROJECT_NAME} GTest::Main)
     if(THREADS_HAVE_PTHREAD_ARG)
       target_compile_options(cnr_ipc_utilities_ipc_test PUBLIC "-pthread")
     endif()
